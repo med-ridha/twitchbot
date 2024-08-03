@@ -12,7 +12,7 @@ class EventSub {
     public refreshToken: string | null = null;
     constructor() {
         this.accessToken = fs.readFileSync('token.txt', 'utf8');
-        this.refreshToken = fs.readFileSync('refreshToken.txt', 'utf8');
+        this.refreshToken = process.env.REFRESH_TOKEN!;
         this.clientID = process.env.TWITCH_CLIENT_ID!;
     }
     async getAccessToken() {
@@ -79,9 +79,7 @@ class EventSub {
         let data = await response.json();
         if (data.access_token) {
             require('fs').writeFileSync('token.txt', data.access_token);
-            require('fs').writeFileSync('refreshToken.txt', data.refresh_token);
             this.accessToken = data.access_token;
-            this.refreshToken = data.refresh_token;
             console.log('got the token!');
         } else {
             console.log('sorry something went wrong refreshing the token!')
