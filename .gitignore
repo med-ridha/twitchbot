@@ -1,3 +1,8 @@
 ./.env
 ./token.txt
 ./refreshToken.txt
+node_modules
+.env
+refreshToken.txt
+token.txt
+dist
