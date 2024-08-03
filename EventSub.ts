@@ -85,7 +85,7 @@ class EventSub {
                 "type": "channel.subscription.gift",
                 "version": "1",
                 "condition": {
-                    "broadcaster_user_id": process.env.USER_ID
+                    "broadcaster_user_id": process.env.BROADCASTER_USER_ID
                 },
                 "transport": {
                     "method": "websocket",
