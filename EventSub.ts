@@ -7,6 +7,8 @@ class EventSub {
     sessionId: string | null = null;
     subId: string | null = null;
     clientID: string | null = null;
+    messageIDs: string[] = [];
+    wss: WebSocket[] = [];
     public accessToken: string | null = null;
     public refreshToken: string | null = null;
     constructor() {
@@ -14,9 +16,13 @@ class EventSub {
         this.refreshToken = process.env.REFRESH_TOKEN!;
         this.clientID = process.env.TWITCH_CLIENT_ID!;
     }
-    async listentoEventSubGiftSub() {
+    async listentoEventSubGiftSub(reconnect_url?: string | null): Promise<WebSocket> {
 
-        const ws = new WebSocket('wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=' + this.keepalive_timeout_seconds);
+        const ws = new WebSocket(reconnect_url ?? 'wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=' + this.keepalive_timeout_seconds);
+        if (this.wss[0] === undefined) {
+            console.log('pushing')
+            this.wss.push(ws);
+        }
 
         ws.on('open', () => {
             console.log('connected');
@@ -29,20 +35,34 @@ class EventSub {
 
         ws.on('message', async (data) => {
             const message = JSON.parse(data.toString());
-            switch (message.metadata.message_type) {
+            if (this.messageIDs.includes(message.metadata.message_id)) {
+                return;
+            }
+            this.messageIDs.push(message.metadata.message_id!);
+            const messageType = message.metadata.message_type;
+            console.log(messageType)
+            switch (messageType) {
                 case 'session_welcome':
-                    this.sessionId = message.payload.session.id;
-                    let result = await this.subscribeToEventSub(this.sessionId!);
-                    let resultData = await result.json();
-                    if (resultData.status === 401) {
-                        await this.handleUnauthorized();
-                        result = await this.subscribeToEventSub(this.sessionId!);
-                        resultData = await result.json();
-                    }
-                    process.on('SIGINT', this.handleExit.bind(this));
+                    if (this.subId === null) {
+                        this.sessionId = message.payload.session.id;
+                        let result = await this.subscribeToEventSub(this.sessionId!);
+                        let resultData = await result.json();
+                        if (resultData.status === 401) {
+                            await this.handleUnauthorized();
+                            result = await this.subscribeToEventSub(this.sessionId!);
+                            resultData = await result.json();
+                        }
+                        process.on('SIGINT', this.handleExit.bind(this));
 
-                    console.log(resultData);
-                    this.subId = resultData.data[0].id;
+                        console.log(resultData);
+                        this.subId = resultData.data[0].id;
+                    } else {
+                        console.log('reconnected');
+                        const oldWS = this.wss.shift();
+                        if (oldWS) {
+                            oldWS.close();
+                        }
+                    }
                     break;
                 case 'session_keepalive':
                     console.log('keepalive');
@@ -50,8 +70,22 @@ class EventSub {
                 case 'notification':
                     console.log(message);
                     break;
+                case 'session_reconnect':
+                    // TODO: handle reconnect
+                    console.log("*** reconnecting ***")
+                    const reconnect_url = message.payload.session.reconnect_url;
+                    this.wss.push(await this.listentoEventSubGiftSub(reconnect_url));
+                    console.log("*** end reconnecting ***")
+                    break;
+                case 'revocation':
+                    // TODO: handle revocation
+                    break;
             }
         });
+        ws.on('close', () => {
+            console.log('connection closed');
+        });
+        return ws;
     }
     async handleUnauthorized() {
         console.log('*** refreshing token ***')
@@ -96,11 +130,16 @@ class EventSub {
         return result;
     }
     async handleExit() {
-        console.log('***handleExit***')
-        console.log(this.subId);
-        console.log(this.clientID);
-        console.log(this.accessToken);
-        const result = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions?id=' + this.subId!, {
+        console.log('*** HandleExit ***')
+        await this.handleDeleteSub();
+        console.log('*** End handleExit ***')
+        process.exit(0);
+
+    }
+
+    async handleDeleteSub() {
+        console.log('*** HandleSubCancel ***')
+        await fetch('https://api.twitch.tv/helix/eventsub/subscriptions?id=' + this.subId!, {
             method: 'DELETE',
             headers: {
                 'Client-Id': this.clientID!,
@@ -108,8 +147,7 @@ class EventSub {
             }
         })
         console.log('subscription deleted');
-        process.exit(0);
-
+        console.log('*** End handleSubCancel ***')
     }
 }
 
