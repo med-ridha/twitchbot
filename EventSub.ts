@@ -83,7 +83,7 @@ class EventSub {
                         clearInterval(this.timerInterval);
                     }
                     this.timerInterval = setInterval(async () => {
-                        if (this.timer! >= this.keepalive_timeout_seconds + 5) {
+                        if (this.timer! >= this.keepalive_timeout_seconds + 2) {
                             let oldWS = this.wss.shift();
                         if (oldWS) {
                             // remove all listeners than close the connection
