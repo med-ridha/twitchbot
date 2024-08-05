@@ -52,6 +52,8 @@ class EventSub {
                             result = await this.subscribeToEventSub(this.sessionId!);
                             resultData = await result.json();
                         }
+                        // for now we should cancel the sub when closing the client
+                        // because it counts toward a limit, to close the client use CTRL+C
                         process.on('SIGINT', this.handleExit.bind(this));
 
                         console.log(resultData);
